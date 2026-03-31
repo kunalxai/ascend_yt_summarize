@@ -1,24 +1,23 @@
 import mammoth from 'mammoth';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import PDFParser from 'pdf2json';
 
 const MAX_CHARS = 80000;
 
 async function extractPdfText(buffer) {
-  const uint8Array = new Uint8Array(buffer);
-  const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-  const pdf = await loadingTask.promise;
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser(null, 1);
 
-  console.log(`PDF loaded — ${pdf.numPages} pages`);
+    pdfParser.on('pdfParser_dataError', err => {
+      reject(new Error(err.parserError));
+    });
 
-  const pageTexts = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join(' ');
-    pageTexts.push(pageText);
-  }
+    pdfParser.on('pdfParser_dataReady', () => {
+      const text = pdfParser.getRawTextContent();
+      resolve(text);
+    });
 
-  return pageTexts.join('\n\n');
+    pdfParser.parseBuffer(buffer);
+  });
 }
 
 export async function extractTextFromFile(buffer, mimetype) {
