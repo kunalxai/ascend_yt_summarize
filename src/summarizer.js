@@ -1,29 +1,21 @@
 import 'dotenv/config';
+import { groqFetch } from './groqClient.js';
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const MODEL = 'llama-3.3-70b-versatile';
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 async function callGroq(systemPrompt, userMessage, maxTokens = 1024) {
-  const response = await fetch(GROQ_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GROQ_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
+  const data = await groqFetch(
+    {
       model: MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage }
+        { role: 'user', content: userMessage },
       ],
       max_tokens: maxTokens,
-      temperature: 0.4
-    })
-  });
-
-  const data = await response.json();
-  if (data.error) throw new Error(`Groq error: ${data.error.message}`);
+      temperature: 0.4,
+    },
+    process.env.GROQ_API_KEY
+  );
   return data.choices[0].message.content.trim();
 }
 
@@ -143,11 +135,8 @@ Structured learning summary:`;
   return await callGroq(system, user, 1800);
 }
 
-// Main function — called by server.js
-// source: 'video' | 'document'
 export async function summarizeTranscript(transcript, source = 'video') {
-
-  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY is missing from .env file');
+  if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is missing from .env file');
 
   console.log(`Transcript length: ${transcript.length} characters`);
 

@@ -3,6 +3,7 @@ import VideoPanel from './VideoPanel';
 import SummaryPanel from './SummaryPanel';
 import ChatBox from './ChatBox';
 import FileUpload from './FileUpload';
+import ErrorBoundary from './ErrorBoundary';
 
 function App() {
   const [mode, setMode] = useState('video');
@@ -12,18 +13,18 @@ function App() {
   const [fileName, setFileName] = useState('');
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState('');              // main input area errors only
 
-  // Flashcard + Quiz state
   const [flashcards, setFlashcards] = useState(null);
   const [quiz, setQuiz] = useState(null);
   const [flashcardLoading, setFlashcardLoading] = useState(false);
   const [quizLoading, setQuizLoading] = useState(false);
+  const [flashcardError, setFlashcardError] = useState('');  // scoped
+  const [quizError, setQuizError] = useState('');            // scoped
 
-  // Resizable divider
-  const [leftWidth, setLeftWidth] = useState(33);
   const isDragging = useRef(false);
   const containerRef = useRef(null);
+  const [leftWidth, setLeftWidth] = useState(33);
 
   const handleMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -64,13 +65,15 @@ function App() {
     setError('');
     setFlashcards(null);
     setQuiz(null);
+    setFlashcardError('');
+    setQuizError('');
   };
 
-  // YouTube summarize
   const handleSummarize = async () => {
     if (!url.trim()) { setError('Please enter a YouTube URL'); return; }
     setError(''); setSummary(''); setVideoId(''); setVideoTitle('');
     setFlashcards(null); setQuiz(null);
+    setFlashcardError(''); setQuizError('');
     setLoading(true);
     try {
       const res = await fetch('/api/summarize', {
@@ -90,18 +93,15 @@ function App() {
     }
   };
 
-  // Document summarize
   const handleFileUpload = async (file) => {
     setError(''); setSummary(''); setFileName('');
     setFlashcards(null); setQuiz(null);
+    setFlashcardError(''); setQuizError('');
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Something went wrong'); return; }
       setSummary(data.summary);
@@ -113,9 +113,9 @@ function App() {
     }
   };
 
-  // Generate flashcards
   const handleFlashcards = async () => {
-    if (flashcards) return; // already generated, SummaryPanel just switches tab
+    if (flashcards) return;
+    setFlashcardError('');
     setFlashcardLoading(true);
     try {
       const res = await fetch('/api/flashcards', {
@@ -124,18 +124,18 @@ function App() {
         body: JSON.stringify({ summary }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to generate flashcards'); return; }
+      if (!res.ok) { setFlashcardError(data.error || 'Failed to generate flashcards'); return; }
       setFlashcards(data.flashcards);
     } catch {
-      setError('Could not generate flashcards.');
+      setFlashcardError('Could not generate flashcards. Please try again.');
     } finally {
       setFlashcardLoading(false);
     }
   };
 
-  // Generate quiz
   const handleQuiz = async () => {
-    if (quiz) return; // already generated, SummaryPanel just switches tab
+    if (quiz) return;
+    setQuizError('');
     setQuizLoading(true);
     try {
       const res = await fetch('/api/quiz', {
@@ -144,10 +144,10 @@ function App() {
         body: JSON.stringify({ summary }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to generate quiz'); return; }
+      if (!res.ok) { setQuizError(data.error || 'Failed to generate quiz'); return; }
       setQuiz(data.quiz);
     } catch {
-      setError('Could not generate quiz.');
+      setQuizError('Could not generate quiz. Please try again.');
     } finally {
       setQuizLoading(false);
     }
@@ -158,8 +158,7 @@ function App() {
       className="h-screen flex flex-col overflow-hidden"
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", backgroundColor: '#f7f9fb' }}
     >
-
-      {/* Navbar */}
+      {/* Navbar — unchanged */}
       <nav
         className="flex-shrink-0 flex items-center justify-between px-6 md:px-8 h-16 z-50"
         style={{ backgroundColor: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(44,52,55,0.06)' }}
@@ -186,14 +185,12 @@ function App() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleMouseUp}
       >
-
         {/* Left panel */}
         <aside
           className="flex-shrink-0 flex flex-col gap-4 p-5 overflow-y-auto md:overflow-hidden"
           style={{ width: `${leftWidth}%`, backgroundColor: '#f0f4f7', minWidth: '280px' }}
         >
-
-          {/* Mode toggle */}
+          {/* Mode toggle — unchanged */}
           <div className="flex-shrink-0 flex p-1 gap-1" style={{ backgroundColor: '#e4eaed', borderRadius: '9999px' }}>
             <button
               onClick={() => switchMode('video')}
@@ -221,7 +218,7 @@ function App() {
             </button>
           </div>
 
-          {/* Input area */}
+          {/* Input area — unchanged */}
           {mode === 'video' ? (
             <div className="relative flex-shrink-0">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -232,7 +229,7 @@ function App() {
               <input
                 type="text"
                 value={url}
-                onChange={e => setUrl(e.target.value)}
+                onChange={e => { setUrl(e.target.value); if (error) setError(''); }}
                 onKeyDown={e => e.key === 'Enter' && handleSummarize()}
                 placeholder="Paste YouTube URL here..."
                 className="w-full h-12 pl-11 pr-32 text-sm focus:outline-none transition-all"
@@ -253,6 +250,7 @@ function App() {
             </div>
           )}
 
+          {/* Error — main input errors only */}
           {error && (
             <p className="text-xs font-medium px-2 flex-shrink-0" style={{ color: '#ef4444' }}>⚠️ {error}</p>
           )}
@@ -276,7 +274,7 @@ function App() {
             </div>
           )}
 
-          {/* Chat */}
+          {/* Chat — wrapped in ErrorBoundary */}
           <div className="flex-1 flex flex-col min-h-0">
             <div className="mb-2 flex-shrink-0">
               <h3 className="text-sm font-bold" style={{ color: '#2c3437' }}>
@@ -287,7 +285,9 @@ function App() {
               </p>
             </div>
             {summary ? (
-              <ChatBox summary={summary} />
+              <ErrorBoundary>
+                <ChatBox summary={summary} />
+              </ErrorBoundary>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center py-6">
                 <div className="w-12 h-12 flex items-center justify-center" style={{ backgroundColor: '#eaeff2', borderRadius: '1rem' }}>
@@ -297,10 +297,9 @@ function App() {
               </div>
             )}
           </div>
-
         </aside>
 
-        {/* Divider */}
+        {/* Divider — unchanged */}
         <div
           onMouseDown={handleMouseDown}
           onTouchStart={handleMouseDown}
@@ -316,22 +315,25 @@ function App() {
           />
         </div>
 
-        {/* Right panel */}
+        {/* Right panel — wrapped in ErrorBoundary */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <SummaryPanel
-            summary={summary}
-            loading={loading}
-            videoId={mode === 'video' ? videoId : null}
-            videoTitle={mode === 'video' ? videoTitle : fileName}
-            flashcards={flashcards}
-            quiz={quiz}
-            flashcardLoading={flashcardLoading}
-            quizLoading={quizLoading}
-            onGenerateFlashcards={handleFlashcards}
-            onGenerateQuiz={handleQuiz}
-          />
+          <ErrorBoundary>
+            <SummaryPanel
+              summary={summary}
+              loading={loading}
+              videoId={mode === 'video' ? videoId : null}
+              videoTitle={mode === 'video' ? videoTitle : fileName}
+              flashcards={flashcards}
+              quiz={quiz}
+              flashcardLoading={flashcardLoading}
+              quizLoading={quizLoading}
+              flashcardError={flashcardError}
+              quizError={quizError}
+              onGenerateFlashcards={handleFlashcards}
+              onGenerateQuiz={handleQuiz}
+            />
+          </ErrorBoundary>
         </div>
-
       </main>
     </div>
   );

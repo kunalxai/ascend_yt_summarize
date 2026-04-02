@@ -1,6 +1,20 @@
-import Groq from "groq-sdk";
+import 'dotenv/config';
+import { groqFetch } from './groqClient.js';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY_TEST });
+const MODEL = 'llama-3.3-70b-versatile';
+
+function parseJSON(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const cleaned = raw.replace(/```json|```/gi, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      throw new Error('Failed to parse JSON response from Groq');
+    }
+  }
+}
 
 // ─── FLASHCARDS ───────────────────────────────────────────────
 export async function generateFlashcards(summary) {
@@ -18,22 +32,18 @@ Example format:
 Summary:
 ${summary}`;
 
-  const response = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.5,
-    max_tokens: 2000,
-  });
+  const data = await groqFetch(
+    {
+      model: MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+      max_tokens: 2000,
+    },
+    process.env.GROQ_API_KEY_TEST
+  );
 
-  const raw = response.choices[0]?.message?.content?.trim();
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    // Strip accidental markdown fences if model misbehaves
-    const cleaned = raw.replace(/```json|```/gi, "").trim();
-    return JSON.parse(cleaned);
-  }
+  const raw = data.choices[0]?.message?.content?.trim();
+  return parseJSON(raw);
 }
 
 // ─── QUIZ ─────────────────────────────────────────────────────
@@ -54,19 +64,16 @@ Example format:
 Summary:
 ${summary}`;
 
-  const response = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.5,
-    max_tokens: 3000,
-  });
+  const data = await groqFetch(
+    {
+      model: MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+      max_tokens: 3000,
+    },
+    process.env.GROQ_API_KEY_TEST
+  );
 
-  const raw = response.choices[0]?.message?.content?.trim();
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    const cleaned = raw.replace(/```json|```/gi, "").trim();
-    return JSON.parse(cleaned);
-  }
+  const raw = data.choices[0]?.message?.content?.trim();
+  return parseJSON(raw);
 }
