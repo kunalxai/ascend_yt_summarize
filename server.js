@@ -6,6 +6,7 @@ import { extractVideoId } from './src/parser.js';
 import { getTranscript } from './src/transcript.js';
 import { summarizeTranscript } from './src/summarizer.js';
 import { extractTextFromFile } from './src/extractor.js';
+import { generateFlashcards, generateQuiz } from "./src/learning.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -141,6 +142,30 @@ ${summary}`
   } catch (error) {
     console.error('Chat error:', error.message);
     res.status(500).json({ error: 'Chat failed' });
+  }
+});
+
+app.post("/api/flashcards", async (req, res) => {
+  try {
+    const { summary } = req.body;
+    if (!summary) return res.status(400).json({ error: "Summary is required" });
+    const flashcards = await generateFlashcards(summary);
+    res.json({ flashcards });
+  } catch (err) {
+    console.error("Flashcard error:", err);
+    res.status(500).json({ error: "Failed to generate flashcards" });
+  }
+});
+
+app.post("/api/quiz", async (req, res) => {
+  try {
+    const { summary } = req.body;
+    if (!summary) return res.status(400).json({ error: "Summary is required" });
+    const quiz = await generateQuiz(summary);
+    res.json({ quiz });
+  } catch (err) {
+    console.error("Quiz error:", err);
+    res.status(500).json({ error: "Failed to generate quiz" });
   }
 });
 

@@ -5,7 +5,7 @@ import ChatBox from './ChatBox';
 import FileUpload from './FileUpload';
 
 function App() {
-  const [mode, setMode] = useState('video'); // 'video' | 'document'
+  const [mode, setMode] = useState('video');
   const [url, setUrl] = useState('');
   const [videoId, setVideoId] = useState('');
   const [videoTitle, setVideoTitle] = useState('');
@@ -13,6 +13,12 @@ function App() {
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Flashcard + Quiz state
+  const [flashcards, setFlashcards] = useState(null);
+  const [quiz, setQuiz] = useState(null);
+  const [flashcardLoading, setFlashcardLoading] = useState(false);
+  const [quizLoading, setQuizLoading] = useState(false);
 
   // Resizable divider
   const [leftWidth, setLeftWidth] = useState(33);
@@ -47,7 +53,6 @@ function App() {
     setLeftWidth(Math.min(55, Math.max(22, newWidth)));
   }, []);
 
-  // Reset all state when switching modes
   const switchMode = (newMode) => {
     if (newMode === mode) return;
     setMode(newMode);
@@ -57,12 +62,16 @@ function App() {
     setFileName('');
     setSummary('');
     setError('');
+    setFlashcards(null);
+    setQuiz(null);
   };
 
   // YouTube summarize
   const handleSummarize = async () => {
     if (!url.trim()) { setError('Please enter a YouTube URL'); return; }
-    setError(''); setSummary(''); setVideoId(''); setVideoTitle(''); setLoading(true);
+    setError(''); setSummary(''); setVideoId(''); setVideoTitle('');
+    setFlashcards(null); setQuiz(null);
+    setLoading(true);
     try {
       const res = await fetch('/api/summarize', {
         method: 'POST',
@@ -83,7 +92,9 @@ function App() {
 
   // Document summarize
   const handleFileUpload = async (file) => {
-    setError(''); setSummary(''); setFileName(''); setLoading(true);
+    setError(''); setSummary(''); setFileName('');
+    setFlashcards(null); setQuiz(null);
+    setLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -102,6 +113,46 @@ function App() {
     }
   };
 
+  // Generate flashcards
+  const handleFlashcards = async () => {
+    if (flashcards) return; // already generated, SummaryPanel just switches tab
+    setFlashcardLoading(true);
+    try {
+      const res = await fetch('/api/flashcards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to generate flashcards'); return; }
+      setFlashcards(data.flashcards);
+    } catch {
+      setError('Could not generate flashcards.');
+    } finally {
+      setFlashcardLoading(false);
+    }
+  };
+
+  // Generate quiz
+  const handleQuiz = async () => {
+    if (quiz) return; // already generated, SummaryPanel just switches tab
+    setQuizLoading(true);
+    try {
+      const res = await fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to generate quiz'); return; }
+      setQuiz(data.quiz);
+    } catch {
+      setError('Could not generate quiz.');
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
   return (
     <div
       className="h-screen flex flex-col overflow-hidden"
@@ -109,8 +160,10 @@ function App() {
     >
 
       {/* Navbar */}
-      <nav className="flex-shrink-0 flex items-center justify-between px-6 md:px-8 h-16 z-50"
-        style={{ backgroundColor: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(44,52,55,0.06)' }}>
+      <nav
+        className="flex-shrink-0 flex items-center justify-between px-6 md:px-8 h-16 z-50"
+        style={{ backgroundColor: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)', boxShadow: '0 4px 24px rgba(44,52,55,0.06)' }}
+      >
         <div className="flex items-center gap-6">
           <span className="text-lg font-extrabold tracking-tight" style={{ color: '#426656' }}>Ascend</span>
           <div className="hidden md:flex gap-5">
@@ -141,10 +194,7 @@ function App() {
         >
 
           {/* Mode toggle */}
-          <div
-            className="flex-shrink-0 flex p-1 gap-1"
-            style={{ backgroundColor: '#e4eaed', borderRadius: '9999px' }}
-          >
+          <div className="flex-shrink-0 flex p-1 gap-1" style={{ backgroundColor: '#e4eaed', borderRadius: '9999px' }}>
             <button
               onClick={() => switchMode('video')}
               className="flex-1 flex items-center justify-center gap-1.5 h-8 text-xs font-semibold transition-all duration-200"
@@ -171,7 +221,7 @@ function App() {
             </button>
           </div>
 
-          {/* Input area — switches based on mode */}
+          {/* Input area */}
           {mode === 'video' ? (
             <div className="relative flex-shrink-0">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -204,19 +254,15 @@ function App() {
           )}
 
           {error && (
-            <p className="text-xs font-medium px-2 flex-shrink-0" style={{ color: '#ef4444' }}>
-              ⚠️ {error}
-            </p>
+            <p className="text-xs font-medium px-2 flex-shrink-0" style={{ color: '#ef4444' }}>⚠️ {error}</p>
           )}
 
-          {/* Video panel — only in video mode */}
           {mode === 'video' && (
             <div className="flex-shrink-0">
               <VideoPanel videoId={videoId} />
             </div>
           )}
 
-          {/* Document info pill — only in document mode when file is processed */}
           {mode === 'document' && fileName && (
             <div
               className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5"
@@ -237,9 +283,7 @@ function App() {
                 💬 Chat with this {mode === 'video' ? 'video' : 'document'}
               </h3>
               <p className="text-xs mt-0.5" style={{ color: '#596064' }}>
-                {summary
-                  ? 'Ask anything about what was covered'
-                  : `Summarize a ${mode === 'video' ? 'video' : 'document'} to start chatting`}
+                {summary ? 'Ask anything about what was covered' : `Summarize a ${mode === 'video' ? 'video' : 'document'} to start chatting`}
               </p>
             </div>
             {summary ? (
@@ -249,12 +293,11 @@ function App() {
                 <div className="w-12 h-12 flex items-center justify-center" style={{ backgroundColor: '#eaeff2', borderRadius: '1rem' }}>
                   <span className="text-xl">💬</span>
                 </div>
-                <p className="text-xs" style={{ color: '#596064' }}>
-                  Chat unlocks after summarizing
-                </p>
+                <p className="text-xs" style={{ color: '#596064' }}>Chat unlocks after summarizing</p>
               </div>
             )}
           </div>
+
         </aside>
 
         {/* Divider */}
@@ -280,6 +323,12 @@ function App() {
             loading={loading}
             videoId={mode === 'video' ? videoId : null}
             videoTitle={mode === 'video' ? videoTitle : fileName}
+            flashcards={flashcards}
+            quiz={quiz}
+            flashcardLoading={flashcardLoading}
+            quizLoading={quizLoading}
+            onGenerateFlashcards={handleFlashcards}
+            onGenerateQuiz={handleQuiz}
           />
         </div>
 
